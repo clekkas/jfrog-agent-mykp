@@ -33,7 +33,7 @@ python test_local.py
 
 The workflow uses the protected GitHub Environment `agent` in this repository. Bootstrap it with `./scripts/bootstrap-github-oidc.ps1 -Repo clekkas/jfrog-agent-mykp -NoRequiredReviewers` (separate state container `agent-tfstate-mykp`, key `hosted-agent/mykp.tfstate`). Backend config, Terraform plans, and state must not be committed.
 
-Before deployment, confirm JFrog's Azure OIDC mapping grants its project identity read access to `byor-demo-docker`, GitHub's OIDC mapping grants this repository deploy access to `byor-demo-docker-local`, and a `byor-private` runner is registered for this repository.
+Before deployment, confirm this Foundry project's managed identity is assigned to the `Foundry-Registry-Agent` enterprise application in Entra (a platform admin does this once; an unassigned project fails with `mi_not_authorized`, and a fresh assignment can take a few minutes to take effect), JFrog's Azure OIDC mapping grants read access to `byor-demo-docker`, GitHub's OIDC mapping grants this repository deploy access to `byor-demo-docker-local`, and a `byor-private` runner is registered for this repository.
 
 The workflow creates the logical agent by default. Set the environment variable `IMPORT_EXISTING_AGENT=true` only if `mykp-hosted-agent` already exists in this Foundry project and the plan is intended to import it.
 
