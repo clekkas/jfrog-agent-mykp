@@ -84,6 +84,9 @@ $v = [pscustomobject][ordered]@{
     JF_URL                         = 'https://trialndswdc.jfrog.io'
     JFROG_REPO                     = 'byor-demo-docker'
     JFROG_GITHUB_OIDC_PROVIDER     = 'github-oidc'
+    REGISTRY_TOKEN_AUDIENCE        = '69500e76-a944-435f-9d97-28822dc29c43'
+    REGISTRY_TOKEN_ENDPOINT        = '/access/api/v1/oidc/token'
+    REGISTRY_OIDC_PROVIDER_NAME    = 'oidc-byor'
 }
 Write-Host "Project: $($v.FOUNDRY_PROJECT_NAME) on account $($v.FOUNDRY_ACCOUNT_NAME)"
 $SubscriptionId = $v.AZURE_SUBSCRIPTION_ID
