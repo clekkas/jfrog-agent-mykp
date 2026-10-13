@@ -1,17 +1,17 @@
 <!-- scope: mykp, mysecond-project-for-kp, kaiser-foundry-resource, jfrog-agent-mykp, jfrog-agent-byor, jfrog-oidc-foundry, agent-mykp, byor-demo-docker, hosted agent, mykp-hosted-agent, terraform state, byor-private -->
 # Architecture
 
-Updated 2026-10-12. This document describes the target deployment. Values that depend on the target Foundry project identity or its connection must come from that project's published platform contract.
+Updated 2026-10-12. This document describes the target deployment. This repo is self-contained and defines all values for the target project.
 
 ## Repository ownership
 
 | Repository | Responsibility |
 |---|---|
-| `jfrog-oidc-foundry` | Foundry-to-JFrog registry connection, platform identities and state, self-hosted runners, and published platform contract |
+| `jfrog-oidc-foundry` | Separate platform repo for other environments; not used by this deployment |
 | `jfrog-agent-byor` | Reference hosted-agent implementation for a different project on the same Foundry account |
 | `jfrog-agent-mykp` | Hosted-agent application, image build, Terraform release, and smoke tests for `mysecond-project-for-kp` |
 
-The agent repository consumes the published contract. It must not read the foundation repository's Terraform state or manage the registry connection.
+This repository does not manage the registry connection: it uses the account-shared connection `jfrog-registry-acct`.
 
 ## Target Foundry project
 
@@ -24,7 +24,7 @@ The agent repository consumes the published contract. It must not read the found
 - Project endpoint: `https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp`
 - Model deployment: `gpt-5-mini`
 
-The hosted agent is `mykp-hosted-agent`, implemented as a FastAPI Responses 2.0.0 container. Its project managed identity is distinct from the identity in `workshop-demo-project`; get its principal ID from the target contract, never from the reference repo.
+The hosted agent is `mykp-hosted-agent`, implemented as a FastAPI Responses 2.0.0 container. Its project managed identity is distinct from the identity in `workshop-demo-project`; get its principal ID (`6dbf0c22-f50c-4a01-98d9-2a14218abb2f`) from the project, never from the reference repo.
 
 ## Image and release
 

@@ -65,7 +65,7 @@ $resourceGroup = Get-AgentVar AZURE_RESOURCE_GROUP
 $account = Get-AgentVar FOUNDRY_ACCOUNT_NAME
 $project = Get-AgentVar FOUNDRY_PROJECT_NAME
 $missingVars = @{ AZURE_SUBSCRIPTION_ID = $subscriptionId; AZURE_RESOURCE_GROUP = $resourceGroup; FOUNDRY_ACCOUNT_NAME = $account; FOUNDRY_PROJECT_NAME = $project }.GetEnumerator() | Where-Object { -not $_.Value } | ForEach-Object Key
-if ($missingVars) { throw "Missing variables in the '$Repo' agent environment: $($missingVars -join ', '). Load the platform contract with scripts/bootstrap-github-oidc.ps1 -ContractFile." }
+if ($missingVars) { throw "Missing variables in the '$Repo' agent environment: $($missingVars -join ', '). Run scripts/bootstrap-github-oidc.ps1." }
 $location = (& az group show -n $resourceGroup --subscription $subscriptionId --query location -o tsv 2>$null)
 
 $rgId = "/subscriptions/$subscriptionId/resourceGroups/$resourceGroup"

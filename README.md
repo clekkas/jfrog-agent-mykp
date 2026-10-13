@@ -10,7 +10,7 @@ This repository deploys the `mykp-hosted-agent` hosted agent to the Foundry proj
 - Project endpoint: `https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp`
 - Model deployment: `gpt-5-mini`
 
-The `jfrog-oidc-foundry` repository owns the Foundry-to-JFrog registry connection and publishes the platform contract. Use a contract artifact whose `FOUNDRY_PROJECT_NAME` is `mysecond-project-for-kp`; do not copy the `workshop-demo-project` contract from `jfrog-agent-byor`. The foundation repo now defines a separate `mykp` environment; after it is merged and bootstrapped, run its apply workflow to publish `platform-contract-mykp` before bootstrapping this repo.
+This repository is self-contained: it needs nothing from `jfrog-oidc-foundry`. It uses the account-shared Foundry connection `jfrog-registry-acct` (visible from the project by name), the existing Terraform state account `tfstateb173d2d85c34` (own container), and a repo-scoped self-hosted runner. All project values are embedded in `scripts/bootstrap-github-oidc.ps1`.
 
 ## Local Checks
 
@@ -31,8 +31,8 @@ python test_local.py
 
 `.github/workflows/deploy-agent.yml` follows the reference pipeline: build and smoke-test a `linux/amd64` image, push it to JFrog with GitHub OIDC, resolve its immutable digest, then deploy with Terraform from the self-hosted `byor-private` runner. This repo uses image name `agent-mykp` in the shared `byor-demo-docker` repository to avoid tag collisions with the reference repo. `agent-plan.yml` is manual and never applies.
 
-The workflow uses the protected GitHub Environment `agent` in this repository. Bootstrap it using the target platform contract and a separate state container, for example `agent-tfstate-mykp` with key `hosted-agent/mykp.tfstate`. The contract JSON, backend config, Terraform plans, and state are local/remote inputs and must not be committed.
+The workflow uses the protected GitHub Environment `agent` in this repository. Bootstrap it with `./scripts/bootstrap-github-oidc.ps1 -Repo clekkas/jfrog-agent-mykp -NoRequiredReviewers` (separate state container `agent-tfstate-mykp`, key `hosted-agent/mykp.tfstate`). Backend config, Terraform plans, and state must not be committed.
 
-Before deployment, confirm the contract points to this project, JFrog's Azure OIDC mapping grants its project identity read access to `byor-demo-docker`, GitHub's OIDC mapping grants this repository deploy access to `byor-demo-docker-local`, and a `byor-private` runner is registered for this repository.
+Before deployment, confirm JFrog's Azure OIDC mapping grants its project identity read access to `byor-demo-docker`, GitHub's OIDC mapping grants this repository deploy access to `byor-demo-docker-local`, and a `byor-private` runner is registered for this repository.
 
 The workflow creates the logical agent by default. Set the environment variable `IMPORT_EXISTING_AGENT=true` only if `mykp-hosted-agent` already exists in this Foundry project and the plan is intended to import it.

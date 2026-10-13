@@ -1,11 +1,10 @@
 name: Build and deploy hosted agent
 
-# Build -> push to JFrog (GitHub OIDC) -> validate the platform contract ->
+# Build -> push to JFrog (GitHub OIDC) -> validate project settings ->
 # deploy the hosted-agent data-plane resource (Azure OIDC) -> REST smoke test.
 #
-# Platform values (AZURE_TENANT_ID, AZURE_SUBSCRIPTION_ID, FOUNDRY_*, JFROG_*, JF_URL) come from the
-# contract published by the foundation repo and are copied into the `agent` environment as variables.
-# This repo never reads foundation Terraform state.
+# This workflow is self-contained: all values (AZURE_*, FOUNDRY_*, JFROG_*, JF_URL) are variables
+# of this repo's `agent` environment, set by scripts/bootstrap-github-oidc.ps1.
 
 on:
   push:

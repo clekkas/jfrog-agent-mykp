@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # Deploy the hosted agent with Terraform (AzAPI) from a workstation.
 #
-# The Foundry<->JFrog registry connection is platform-owned (foundation repo) and only consumed
-# here. Connection name and project endpoint come from the published platform contract
-# (foundry-<env>.json, needs jq) or from explicit env vars. Foundation state is never read.
+# Defaults target project mysecond-project-for-kp and the account-shared registry connection
+# jfrog-registry-acct; override with PROJECT_ENDPOINT / REGISTRY_CONNECTION_NAME.
 #
-#   IMAGE=<host>/<repo>/agent-mykp@sha256:<digest> CONTRACT_FILE=./foundry-mykp.json ./deploy.sh
+#   IMAGE=<host>/<repo>/agent-mykp@sha256:<digest> ./deploy.sh
 #   AUTO_APPROVE=1 ... ./deploy.sh     # non-interactive
 #
 set -euo pipefail
@@ -16,13 +15,8 @@ AGENT_SERVICE="${AGENT_SERVICE:-mykp-hosted-agent}"
 MODEL_DEPLOYMENT="${MODEL_DEPLOYMENT:-gpt-5-mini}"
 IMPORT_EXISTING_AGENT="${IMPORT_EXISTING_AGENT:-false}"
 
-if [[ -n "${CONTRACT_FILE:-}" ]]; then
-  [[ -f "${CONTRACT_FILE}" ]] || { echo "Contract file not found: ${CONTRACT_FILE}" >&2; exit 1; }
-  PROJECT_ENDPOINT="${PROJECT_ENDPOINT:-$(jq -r '.values.FOUNDRY_PROJECT_ENDPOINT // empty' "${CONTRACT_FILE}")}"
-  REGISTRY_CONNECTION_NAME="${REGISTRY_CONNECTION_NAME:-$(jq -r '.values.JFROG_REGISTRY_CONNECTION_NAME // empty' "${CONTRACT_FILE}")}"
-fi
-[[ -n "${PROJECT_ENDPOINT:-}" ]] || { echo "Project endpoint unknown. Set CONTRACT_FILE or PROJECT_ENDPOINT." >&2; exit 1; }
-[[ -n "${REGISTRY_CONNECTION_NAME:-}" ]] || { echo "Registry connection name unknown. Set CONTRACT_FILE or REGISTRY_CONNECTION_NAME." >&2; exit 1; }
+PROJECT_ENDPOINT="${PROJECT_ENDPOINT:-https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp}"
+REGISTRY_CONNECTION_NAME="${REGISTRY_CONNECTION_NAME:-jfrog-registry-acct}"
 [[ "${IMPORT_EXISTING_AGENT}" == "true" || "${IMPORT_EXISTING_AGENT}" == "false" ]] || {
   echo "IMPORT_EXISTING_AGENT must be true or false." >&2
   exit 1

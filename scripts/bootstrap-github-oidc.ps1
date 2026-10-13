@@ -2,40 +2,26 @@
 .SYNOPSIS
   One-time (re-runnable) setup of the AGENT deployment pipeline for this repository.
 
-  This repo owns only: image build, JFrog push, hosted-agent Terraform and smoke tests.
-  The Foundry<->JFrog registry connection, the CI runner, the state account and the
-  foundation deploy identities belong to the foundation (platform) repo. This script only
-  CONSUMES the platform contract it publishes.
+  This repo is self-contained: image build, JFrog push, hosted-agent Terraform and smoke tests.
+  It uses the account-shared Foundry registry connection jfrog-registry-acct and the existing
+  Terraform state account; it needs nothing from any other repository.
 
   Creates or reuses, with no client secrets anywhere:
     - One Entra app + service principal for the agent deployer, with a GitHub OIDC federated
       credential bound to the GitHub Environment `agent` (not a branch)
-    - A dedicated `agent-tfstate-mykp` container in the platform-owned state account, with
-      container-scoped RBAC (this identity gets no role on the foundation state container)
+    - A dedicated `agent-tfstate-mykp` container in the existing state account, with
+      container-scoped RBAC
     - Project/resource-group RBAC for the agent identity
-    - The protected GitHub Environment `agent` (required reviewers, `main` only), holding the
-      platform contract values plus the app-owned variables
+    - The GitHub Environment `agent` (`main` only) holding all deployment variables
     - infra/hosted-agent/backend.hcl (git-ignored) for local runs
 
-  The contract file is the foundation repo's published artifact (foundry-<env>.json). Its
-  valuesSha256 is verified before anything is written. Foundation Terraform state is never read.
-
 .EXAMPLE
-  ./scripts/bootstrap-github-oidc.ps1 -Repo contoso/agent-repo `
-    -ContractFile .\foundry-mykp.json -StateStorageAccount tfstateb173d2d85c34 `
-    -Reviewers alice,contoso/agent-approvers
-
-  # GitHub plan without required reviewers on private repos (no approval gate on the deploy job):
-  ./scripts/bootstrap-github-oidc.ps1 -Repo contoso/agent-repo `
-    -ContractFile .\foundry-mykp.json -StateStorageAccount tfstateb173d2d85c34 -NoRequiredReviewers
+  ./scripts/bootstrap-github-oidc.ps1 -Repo clekkas/jfrog-agent-mykp -NoRequiredReviewers
 #>
 [CmdletBinding()]
 param(
     [Parameter(Mandatory)][string]$Repo,
-    # foundry-<env>.json from the foundation repo's platform-contract-<env> artifact.
-    [Parameter(Mandatory)][string]$ContractFile,
-    # The platform-owned state account. It must already exist (created by the foundation bootstrap).
-    [Parameter(Mandatory)][string]$StateStorageAccount,
+    [string]$StateStorageAccount = 'tfstateb173d2d85c34',
     [string]$StateResourceGroup,
     [string]$StateContainer = 'agent-tfstate-mykp',
     [string]$EnvName,
@@ -72,33 +58,6 @@ function Set-RoleAssignment([string]$ObjectId, [string]$PrincipalType, [string]$
     Write-Host "  + $Role ($PrincipalType)"
 }
 
-# Canonical JSON of the flat values map: keys sorted ordinally, compact. Matches `jq -S -c .values`.
-function Get-ValuesSha256([psobject]$Values) {
-    $names = [string[]]@($Values.PSObject.Properties.Name)
-    [Array]::Sort($names, [StringComparer]::Ordinal)
-    function Format-JsonString([string]$s) {
-        $sb = [Text.StringBuilder]::new('"')
-        foreach ($c in $s.ToCharArray()) {
-            switch ($c) {
-                '"' { [void]$sb.Append('\"') }
-                '\' { [void]$sb.Append('\\') }
-                "`n" { [void]$sb.Append('\n') }
-                "`r" { [void]$sb.Append('\r') }
-                "`t" { [void]$sb.Append('\t') }
-                "`b" { [void]$sb.Append('\b') }
-                "`f" { [void]$sb.Append('\f') }
-                default { if ([int]$c -lt 0x20) { [void]$sb.AppendFormat('\u{0:x4}', [int]$c) } else { [void]$sb.Append($c) } }
-            }
-        }
-        [void]$sb.Append('"')
-        $sb.ToString()
-    }
-    $json = '{' + (($names | ForEach-Object { (Format-JsonString $_) + ':' + (Format-JsonString ([string]$Values.$_)) }) -join ',') + '}'
-    # The platform hashes `jq -S -c .values | sha256sum`, so the hashed text ends with a newline.
-    $bytes = [Text.UTF8Encoding]::new($false).GetBytes($json + "`n")
-    [BitConverter]::ToString([Security.Cryptography.SHA256]::Create().ComputeHash($bytes)).Replace('-', '').ToLower()
-}
-
 # ---- Guards that must hold before anything is created ---------------------------------------
 if (-not $SkipGitHub -and -not $NoRequiredReviewers -and $Reviewers.Count -eq 0) {
     throw "-Reviewers is required (GitHub users and/or org/team-slug), or pass -NoRequiredReviewers explicitly. Re-running this script without either would clear any reviewers set earlier."
@@ -111,23 +70,22 @@ if ($visibility -notin 'PRIVATE', 'INTERNAL') {
 }
 Write-Host "Repository visibility: $visibility"
 
-# ---- Platform contract -------------------------------------------------------------------------
-if (-not (Test-Path $ContractFile)) { throw "Contract file not found: $ContractFile" }
-$contract = Get-Content $ContractFile -Raw | ConvertFrom-Json
-if ($contract.contractVersion -ne '1') { throw "Unsupported contractVersion '$($contract.contractVersion)' (this script understands '1')." }
-if (-not $contract.values) { throw "$ContractFile has no 'values' object." }
-$actualSha = Get-ValuesSha256 $contract.values
-if ($actualSha -ne $contract.valuesSha256) {
-    throw "valuesSha256 mismatch. File says $($contract.valuesSha256), computed $actualSha. The contract was edited or is not the published artifact."
+# ---- Project values (non-secret; this repo is the source of truth) ------------------------------
+$v = [pscustomobject][ordered]@{
+    AZURE_TENANT_ID                = '16b3c013-d300-468d-ac64-7eda0820b6d3'
+    AZURE_SUBSCRIPTION_ID          = '0e494a0c-e2e6-41f8-8a50-6064d842225e'
+    AZURE_RESOURCE_GROUP           = 'kaiser-foundry-rg'
+    FOUNDRY_ACCOUNT_NAME           = 'kaiser-foundry-resource'
+    FOUNDRY_PROJECT_NAME           = 'mysecond-project-for-kp'
+    FOUNDRY_PROJECT_RESOURCE_ID    = '/subscriptions/0e494a0c-e2e6-41f8-8a50-6064d842225e/resourceGroups/kaiser-foundry-rg/providers/Microsoft.CognitiveServices/accounts/kaiser-foundry-resource/projects/mysecond-project-for-kp'
+    FOUNDRY_PROJECT_ENDPOINT       = 'https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp'
+    # Account-shared connection; it resolves by name from the project.
+    JFROG_REGISTRY_CONNECTION_NAME = 'jfrog-registry-acct'
+    JF_URL                         = 'https://trialndswdc.jfrog.io'
+    JFROG_REPO                     = 'byor-demo-docker'
+    JFROG_GITHUB_OIDC_PROVIDER     = 'github-oidc'
 }
-Write-Host "Contract: environment '$($contract.environment)', commit $($contract.source.commit), sha256 $actualSha (verified)"
-
-$requiredKeys = 'AZURE_TENANT_ID', 'AZURE_SUBSCRIPTION_ID', 'AZURE_RESOURCE_GROUP', 'FOUNDRY_ACCOUNT_NAME', 'FOUNDRY_PROJECT_NAME',
-'FOUNDRY_PROJECT_RESOURCE_ID', 'FOUNDRY_PROJECT_ENDPOINT', 'JFROG_REGISTRY_CONNECTION_NAME', 'JF_URL', 'JFROG_REPO', 'JFROG_GITHUB_OIDC_PROVIDER'
-$missing = $requiredKeys | Where-Object { -not $contract.values.$_ }
-if ($missing) { throw "Contract is missing required values: $($missing -join ', ')" }
-
-$v = $contract.values
+Write-Host "Project: $($v.FOUNDRY_PROJECT_NAME) on account $($v.FOUNDRY_ACCOUNT_NAME)"
 $SubscriptionId = $v.AZURE_SUBSCRIPTION_ID
 $TenantId = $v.AZURE_TENANT_ID
 $ResourceGroup = $v.AZURE_RESOURCE_GROUP
@@ -182,7 +140,7 @@ if ($legacy) {
 # ---- Terraform state: dedicated agent container in the platform-owned account ------------------
 Write-Host "==> State storage '$StateStorageAccount' / container '$StateContainer'"
 $saId = & az storage account show -n $StateStorageAccount -g $StateResourceGroup --query id -o tsv 2>$null
-if (-not $saId) { throw "State account '$StateStorageAccount' not found in resource group '$StateResourceGroup'. It is created by the foundation repo's bootstrap; this repo does not create it." }
+if (-not $saId) { throw "State account '$StateStorageAccount' not found in resource group '$StateResourceGroup'. Create it first or pass -StateStorageAccount." }
 Write-Host "  = $saId"
 
 # Management-plane create: works even when the account's public network access is disabled.
@@ -267,7 +225,7 @@ if (-not $SkipGitHub) {
     Write-Host "  verified: $reviewerCount required reviewer(s); deployment branches: $branches"
     if ($branches -ne 'main') { Write-Warning "Deployment branches for '$agentEnv' are '$branches', expected only 'main'. Remove extras in Settings -> Environments." }
 
-    Write-Host "==> Variables on environment '$agentEnv': platform contract (copied from $ContractFile)"
+    Write-Host "==> Variables on environment '$agentEnv': project values"
     foreach ($name in ($v.PSObject.Properties.Name | Sort-Object)) { Set-GitHubVariable $name ([string]$v.$name) $agentEnv }
 
     Write-Host "==> Variables on environment '$agentEnv': app-owned"
@@ -308,7 +266,6 @@ Remaining manual steps:
   1. JFrog ($($v.JF_URL)): the GitHub OIDC integration '$($v.JFROG_GITHUB_OIDC_PROVIDER)' identity mapping must allow
        Claims JSON : {"repository":"$Repo","ref":"refs/heads/main"}   (the ref claim is still present in environment-scoped tokens)
        Token scope : Read + Deploy/Cache on the repo behind '$($v.JFROG_REPO)'
-  2. Runner and state private endpoint are platform-owned: confirm the runner labelled '$RunnerLabel' is online for this repo
-     (see the foundation repo README). This repo does not provision it.
+  2. Confirm the runner labelled '$RunnerLabel' is online for this repo (Settings -> Actions -> Runners).
   3. $(if ($NoRequiredReviewers) { "'$agentEnv' has NO approval gate (-NoRequiredReviewers). Re-run with -Reviewers once your plan supports it." } else { "Approvers for '$agentEnv' will see one approval prompt per job that uses the environment (build and deploy)." })
 "@
