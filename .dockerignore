@@ -1,0 +1,15 @@
+.git
+.github
+.azure
+.venv
+venv
+__pycache__
+*.py[cod]
+*.tfstate
+*.tfstate.*
+tfplan
+*.tfvars
+backend.hcl
+.terraform
+foundry-*.json
+session-log.txt

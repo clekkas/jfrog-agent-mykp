@@ -1,0 +1,22 @@
+.azure
+.venv/
+__pycache__/
+*.pyc
+.env
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+tfplan
+infra/**/terraform.tfvars
+infra/**/backend.hcl
+
+# Local environment notes
+jfrog-oidc-setup.txt
+session-log.txt
+
+foundry-*.json
+
+# Stray local Python install (created by the Windows py launcher)
+/Python/
