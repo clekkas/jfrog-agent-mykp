@@ -1,0 +1,10 @@
+project_endpoint = "https://<account>.services.ai.azure.com/api/projects/<project>"
+agent_name       = "mykp-hosted-agent"
+image_uri        = "yourtrial.jfrog.io/foundry-agents/agent@sha256:<64-hex-digest>"
+
+registry_connection_name = "jfrog-registry"
+model_deployment_name     = "gpt-5-mini"
+
+# Set true only when the logical agent already exists in this target project
+# outside this repository's Terraform state. New project deployments create it.
+import_existing_agent = false
