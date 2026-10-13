@@ -36,3 +36,50 @@ The workflow uses the protected GitHub Environment `agent` in this repository. B
 Before deployment, confirm JFrog's Azure OIDC mapping grants its project identity read access to `byor-demo-docker`, GitHub's OIDC mapping grants this repository deploy access to `byor-demo-docker-local`, and a `byor-private` runner is registered for this repository.
 
 The workflow creates the logical agent by default. Set the environment variable `IMPORT_EXISTING_AGENT=true` only if `mykp-hosted-agent` already exists in this Foundry project and the plan is intended to import it.
+
+## Platform Contract Integration
+
+### What is the Platform Contract?
+This repository is an **application delivery repository**. It does not own or manage the private JFrog container registry connection or the top-level Microsoft Foundry account. All infrastructure dependencies and connection details are defined upstream in the platform foundation repository (`jfrog-oidc-foundry`) and published as a versioned **Platform Contract** (`foundry-<env>.json`).
+
+The contract provides:
+- **Registry connection**: `JFROG_REGISTRY_CONNECTION_NAME` (`jfrog-registry-acct`) and `JFROG_REGISTRY_CONNECTION_ID`.
+- **JFrog endpoints**: `JF_URL` (`https://trialndswdc.jfrog.io`), `JFROG_REPO` (`byor-demo-docker`), and `JFROG_GITHUB_OIDC_PROVIDER` (`github-oidc`).
+- **OIDC token exchange settings**: `REGISTRY_TOKEN_AUDIENCE`, `REGISTRY_TOKEN_ENDPOINT`, and `REGISTRY_OIDC_PROVIDER_NAME` (`oidc-byor`).
+- **Foundry scope**: `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `FOUNDRY_ACCOUNT_NAME`.
+
+### How the Contract is Used in Deployment
+The deployment pipeline (`.github/workflows/deploy-agent.yml`) strictly consumes contract values from the protected GitHub Environment (`agent`):
+
+1. **Build & Push Image (`build` job):**
+   - Logs in to JFrog using GitHub Actions OIDC (`JFROG_GITHUB_OIDC_PROVIDER`) without passwords or static tokens.
+   - Tags and pushes the container image to `<JF_URL host>/<JFROG_REPO>/agent-mykp:<tag>`.
+   - Resolves the immutable `@sha256:...` digest.
+
+2. **Validate Contract (`deploy` job):**
+   - Validates that all required contract variables are present, endpoints are well-formed HTTPS URLs, and resource IDs match the target subscription.
+
+3. **Deploy Hosted Agent (`infra/hosted-agent/main.tf`):**
+   - Terraform provisions the data-plane agent (`azapi_data_plane_resource.hosted_agent`).
+   - Sets `container_configuration.registry_connection_id = var.registry_connection_name` (`jfrog-registry-acct`).
+   - At runtime, Foundry connects to JFrog using the account-level shared connection and exchanges its project managed identity token for an Artifactory read token to pull the image layers.
+
+4. **Smoke Test:**
+   - Calls the hosted agent endpoint (`FOUNDRY_PROJECT_ENDPOINT`) and verifies that the new version is active and answers requests.
+
+### Ingesting Contract Updates
+When `jfrog-oidc-foundry` publishes a new contract:
+- **Using GitHub Copilot:** Run the prompt action `/apply-platform-contract` in chat.
+- **Using the Import Script:**
+  ```powershell
+  # Download latest artifact if needed:
+  gh run download --repo clekkas/jfrog-oidc-foundry -n platform-contract-dev -D .
+  # Import values into the protected agent environment:
+  ./scripts/import-platform-contract.ps1 -ContractPath foundry-dev.json -Repo clekkas/jfrog-agent-mykp -Environment agent
+  ```
+- **Using GitHub CLI directly:**
+  ```bash
+  jq -r '.values | to_entries[] | [.key, .value] | @tsv' foundry-dev.json | while IFS=$'\t' read -r k v; do
+    gh variable set "$k" --repo clekkas/jfrog-agent-mykp --env agent --body "$v"
+  done
+  ```
