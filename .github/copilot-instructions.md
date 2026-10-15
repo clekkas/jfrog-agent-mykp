@@ -6,8 +6,9 @@ This repository deploys the `mykp-hosted-agent` hosted agent to Microsoft Foundr
 
 This repository is **application-only** and does NOT manage cloud infrastructure or registry connections directly:
 - The private JFrog OIDC connection (`jfrog-registry-acct`) is provisioned and managed centrally by the foundation repository (`jfrog-oidc-foundry`).
-- Platform configuration (registry URL, repository key, OIDC provider names, token audience, endpoints) is provided via a **Platform Contract** (`foundry-<env>.json`).
-- These contract values are ingested as GitHub Environment variables on the protected `agent` environment.
+- Project deployment variables are initially set by this repo's bootstrap, using foundation-owned shared infrastructure.
+- Approved **Platform Contract** updates may be imported into the protected `agent` environment only when they match its existing project.
+- The current foundation dev contract targets `workshop-demo-project` and is not valid here. A matching mykp contract is not currently published.
 
 ## Deployment Guidelines
 
@@ -17,8 +18,12 @@ This repository is **application-only** and does NOT manage cloud infrastructure
 2. **Consuming Contract Changes:**
    - To adapt the deployment to a new or updated platform contract, run the prompt action:
      `/apply-platform-contract` (defined in `.github/prompts/apply-platform-contract.prompt.md`)
-   - Or use the script `scripts/import-platform-contract.ps1`.
+   - Or use `scripts/import-platform-contract.ps1 -ContractPath <matching-published-contract>`.
+   - The importer verifies schema/checksum and the existing environment's full project tuple before any writes. Never bypass it with bulk variable-copy commands or edit/re-hash a mismatched artifact.
 3. **Terraform Scope:**
    - `infra/hosted-agent/` only manages the data-plane resource `azapi_data_plane_resource.hosted_agent`.
    - `container_configuration.registry_connection_id` must reference `${TF_VAR_registry_connection_name}` (which resolves to `jfrog-registry-acct`).
    - It maintains state in its own isolated container (`agent-tfstate-mykp`) and never accesses the foundation repository's state.
+4. **Release Validation:**
+   - Smoke tests create a session pinned to the exact candidate version; never change public routing to test a release.
+   - Model mode requires execution metadata from a successful model call, including deployment and upstream response ID. Echo mode must be explicitly configured; blocked/lookup replies are not model evidence.

@@ -1,17 +1,19 @@
 ---
 name: "Apply Platform Contract"
 description: "Update the agent deployment environment and configuration to utilize the foundation platform contract (foundry-<env>.json)"
-argument-hint: "Environment name (e.g. dev) or path to contract file"
+argument-hint: "Path to an approved published contract matching mysecond-project-for-kp"
 agent: "agent"
 ---
 
 # Apply Platform Contract to Agent Deployment
 
-You are updating this repository's deployment pipeline to utilize the platform contract published by `jfrog-oidc-foundry`.
+You are updating platform variables in this repository's protected `agent` environment from an approved, matching-project contract. Do not change the deployment target or deploy an agent as part of this operation.
 
 ## Background & Architecture
 
-This repository is an **application repo** that deploys a hosted agent to Microsoft Foundry. It does NOT own the container registry connection or the Foundry account foundation. Instead, it consumes approved platform values published by `jfrog-oidc-foundry` via a **Platform Contract** (`foundry-<env>.json`).
+This **application repo** is independently bootstrapped but depends on foundation-owned registry, state, and runner infrastructure. Bootstrap sets its target to `mysecond-project-for-kp`. Contract imports are an optional update path, not a requirement for initial setup.
+
+**The foundation currently publishes a dev contract for `workshop-demo-project`, not this project. No matching mykp contract is currently published.** If only the dev artifact is available, stop and report the missing matching-project prerequisite. Do not alter target fields and recompute its checksum.
 
 The platform contract provides:
 - `JFROG_REGISTRY_CONNECTION_NAME`: The shared connection name (e.g., `jfrog-registry-acct`).
@@ -27,28 +29,16 @@ The platform contract provides:
 ## Steps to Execute
 
 ### 1. Locate and Validate Contract
-1. Check if `foundry-<env>.json` (e.g., `foundry-dev.json`) exists in the repository root.
-2. If not found or updating to the latest, download the latest artifact from `jfrog-oidc-foundry`:
-   ```bash
-   gh run download --repo clekkas/jfrog-oidc-foundry -n platform-contract-<env> -D .
-   ```
-3. Verify the checksum:
-   ```bash
-   test "$(jq -S -c .values foundry-<env>.json | sha256sum | cut -d' ' -f1)" = "$(jq -r .valuesSha256 foundry-<env>.json)" && echo "Contract checksum OK"
-   ```
+1. Obtain the user-specified contract and verify its source workflow/artifact is approved. A valid checksum alone is not proof of provenance.
+2. Confirm it targets this project's existing `agent` environment, not the workshop project.
+3. Confirm bootstrap has already initialized the environment. Do not initialize or retarget it from the artifact.
 
 ### 2. Update GitHub Environment Variables
-Update the protected `agent` GitHub Environment variables to match the values from the contract.
-Run `scripts/import-platform-contract.ps1`:
+Use only the guarded importer. It validates version, required string values, canonical checksum, internal project fields, and the existing destination before any writes:
 ```powershell
-./scripts/import-platform-contract.ps1 -ContractPath "foundry-dev.json" -Repo "clekkas/jfrog-agent-mykp" -Environment "agent"
+./scripts/import-platform-contract.ps1 -ContractPath "<approved-matching-project-contract.json>" -Repo "clekkas/jfrog-agent-mykp" -Environment "agent"
 ```
-Or set them individually with the GitHub CLI:
-```bash
-jq -r '.values | to_entries[] | [.key, .value] | @tsv' foundry-dev.json | while IFS=$'\t' read -r k v; do
-  gh variable set "$k" --repo clekkas/jfrog-agent-mykp --env agent --body "$v"
-done
-```
+Never use bulk `gh variable set` loops or manual target overrides to bypass a failed validation. App-owned deployment identities and state settings are not contract inputs.
 
 ### 3. Verify Deployment Terraform & Workflow
 Ensure the deployment files in this repo properly wire the contract variables:
@@ -62,14 +52,7 @@ Ensure the deployment files in this repo properly wire the contract variables:
 - In `scripts/bootstrap-github-oidc.ps1`:
   - Ensure local defaults match the shared connection `jfrog-registry-acct`.
 
-### 4. Trigger & Verify Deployment
-1. Start the self-hosted runner VM if deallocated (`byor-ci-agent-runner-01`).
-2. Trigger the deployment workflow:
-   ```bash
-   gh workflow run deploy-agent.yml --repo clekkas/jfrog-agent-mykp --ref main
-   ```
-3. Verify in the workflow run logs:
-   - Image built and pushed to `<JF_URL host>/<JFROG_REPO>/agent-mykp`
-   - Terraform modifies `azapi_data_plane_resource.hosted_agent` referencing `jfrog-registry-acct`
-   - OIDC token exchange succeeds (no `exchange_failed` errors)
-   - Smoke test passes (`status: completed`).
+### 4. Report the Result
+Report the matched project and verified checksum, or the specific validation failure. Do not start runner VMs or trigger deployment automatically.
+
+On a separately approved release, the workflow verifies the immutable image, creates a session pinned to the candidate version, and checks execution provenance. Model mode requires the expected deployment and upstream model response ID; a completed scope-blocked or echo response is not sufficient.

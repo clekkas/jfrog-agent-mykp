@@ -2,9 +2,10 @@
 .SYNOPSIS
   One-time (re-runnable) setup of the AGENT deployment pipeline for this repository.
 
-  This repo is self-contained: image build, JFrog push, hosted-agent Terraform and smoke tests.
+  This repo independently bootstraps image build, JFrog push, hosted-agent Terraform and smoke tests.
   It uses the account-shared Foundry registry connection jfrog-registry-acct and the existing
-  Terraform state account; it needs nothing from any other repository.
+  Terraform state account and runner infrastructure owned by jfrog-oidc-foundry.
+  No contract download is needed for bootstrap; later imports require a matching-project contract.
 
   Creates or reuses, with no client secrets anywhere:
     - One Entra app + service principal for the agent deployer, with a GitHub OIDC federated

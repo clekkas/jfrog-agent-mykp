@@ -10,7 +10,7 @@ This repository deploys the `mykp-hosted-agent` hosted agent to the Foundry proj
 - Project endpoint: `https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp`
 - Model deployment: `gpt-5-mini`
 
-This repository is self-contained: it needs nothing from `jfrog-oidc-foundry`. It uses the account-shared Foundry connection `jfrog-registry-acct` (visible from the project by name), the existing Terraform state account `tfstateb173d2d85c34` (own container), and a repo-scoped self-hosted runner. All project values are embedded in `scripts/bootstrap-github-oidc.ps1`.
+This application repository is independently bootstrapped, but depends on infrastructure owned by `jfrog-oidc-foundry`: the account-shared Foundry connection `jfrog-registry-acct`, the Terraform state account `tfstateb173d2d85c34`, and the runner infrastructure. It has its own state container and repo-scoped runner. `scripts/bootstrap-github-oidc.ps1` initializes this project's deployment variables without reading foundation state or downloading a contract.
 
 ## Local Checks
 
@@ -27,6 +27,16 @@ In another terminal, run the local Responses and health checks:
 python test_local.py
 ```
 
+Offline regression tests (no Azure, JFrog, or GitHub writes):
+
+```powershell
+python -m unittest discover -s tests -q
+pwsh -NoProfile -File scripts/test-import-platform-contract.ps1
+```
+
+The importer harness uses Python's standard library as an independent checksum oracle and mocks every `gh` call.
+`test-local.ps1` and `test-local.sh` delegate to `test_local.py`, honor `BASE`, and propagate the same execution-provenance checks. They require Python (`python` on PowerShell, `python3` on Bash).
+
 ## CI/CD
 
 `.github/workflows/deploy-agent.yml` follows the reference pipeline: build and smoke-test a `linux/amd64` image, push it to JFrog with GitHub OIDC, resolve its immutable digest, then deploy with Terraform from the self-hosted `byor-private` runner. This repo uses image name `agent-mykp` in the shared `byor-demo-docker` repository to avoid tag collisions with the reference repo. `agent-plan.yml` is manual and never applies.
@@ -37,10 +47,14 @@ Before deployment, confirm this Foundry project's managed identity is assigned t
 
 The workflow creates the logical agent by default. Set the environment variable `IMPORT_EXISTING_AGENT=true` only if `mykp-hosted-agent` already exists in this Foundry project and the plan is intended to import it.
 
+Set the protected environment variable `MODEL_DEPLOYMENT_NAME` to the desired deployment for model mode, or an empty value for intentional echo mode. Terraform passes this setting to the container; `azure.yaml` is not the release source of truth.
+
 ## Platform Contract Integration
 
 ### What is the Platform Contract?
-This repository is an **application delivery repository**. It does not own or manage the private JFrog container registry connection or the top-level Microsoft Foundry account. All infrastructure dependencies and connection details are defined upstream in the platform foundation repository (`jfrog-oidc-foundry`) and published as a versioned **Platform Contract** (`foundry-<env>.json`).
+This repository is an **application delivery repository**. It does not manage registry connections or the Foundry account. The foundation publishes versioned **Platform Contracts** (`foundry-<env>.json`) for projects it manages. This repo can optionally import approved updates, but only from a contract matching its already initialized project.
+
+**The current foundation dev contract targets `workshop-demo-project`, not `mysecond-project-for-kp`. It must not be imported here. The foundation does not currently publish a matching mykp contract.** Keep using the existing bootstrap configuration until the platform owner provides an approved published contract for this project. Do not edit a workshop artifact and recompute its checksum.
 
 The contract provides:
 - **Registry connection**: `JFROG_REGISTRY_CONNECTION_NAME` (`jfrog-registry-acct`) and `JFROG_REGISTRY_CONNECTION_ID`.
@@ -49,7 +63,7 @@ The contract provides:
 - **Foundry scope**: `AZURE_TENANT_ID`, `AZURE_SUBSCRIPTION_ID`, `AZURE_RESOURCE_GROUP`, `FOUNDRY_ACCOUNT_NAME`.
 
 ### How the Contract is Used in Deployment
-The deployment pipeline (`.github/workflows/deploy-agent.yml`) strictly consumes contract values from the protected GitHub Environment (`agent`):
+The deployment pipeline (`.github/workflows/deploy-agent.yml`) consumes deployment variables from the protected GitHub Environment (`agent`), initialized by bootstrap or refreshed through a validated matching-project contract:
 
 1. **Build & Push Image (`build` job):**
    - Logs in to JFrog using GitHub Actions OIDC (`JFROG_GITHUB_OIDC_PROVIDER`) without passwords or static tokens.
@@ -65,21 +79,30 @@ The deployment pipeline (`.github/workflows/deploy-agent.yml`) strictly consumes
    - At runtime, Foundry connects to JFrog using the account-level shared connection and exchanges its project managed identity token for an Artifactory read token to pull the image layers.
 
 4. **Smoke Test:**
-   - Calls the hosted agent endpoint (`FOUNDRY_PROJECT_ENDPOINT`) and verifies that the new version is active and answers requests.
+   - Verifies the exact candidate version is active with the intended immutable image and model setting.
+   - Creates a session pinned to that version, invokes with its `agent_session_id`, and deletes only that test session afterward. Public endpoint routing is unchanged.
+   - Uses an in-scope prompt and requires `metadata.execution_mode` to match the configuration. Model mode additionally requires `model_deployment` and a nonempty `upstream_response_id` recorded after a successful model call. Scope-blocked, deterministic lookup, and echo responses cannot pass as model responses.
 
 ### Ingesting Contract Updates
-When `jfrog-oidc-foundry` publishes a new contract:
-- **Using GitHub Copilot:** Run the prompt action `/apply-platform-contract` in chat.
-- **Using the Import Script:**
-  ```powershell
-  # Download latest artifact if needed:
-  gh run download --repo clekkas/jfrog-oidc-foundry -n platform-contract-dev -D .
-  # Import values into the protected agent environment:
-  ./scripts/import-platform-contract.ps1 -ContractPath foundry-dev.json -Repo clekkas/jfrog-agent-mykp -Environment agent
-  ```
-- **Using GitHub CLI directly:**
-  ```bash
-  jq -r '.values | to_entries[] | [.key, .value] | @tsv' foundry-dev.json | while IFS=$'\t' read -r k v; do
-    gh variable set "$k" --repo clekkas/jfrog-agent-mykp --env agent --body "$v"
-  done
-  ```
+After bootstrap, obtain an approved published contract for **this exact project**, inspect its source run, and use the guarded importer (or `/apply-platform-contract`):
+
+```powershell
+# Example filename only; this matching artifact must first be supplied by the platform owner.
+./scripts/import-platform-contract.ps1 -ContractPath foundry-mykp.json -Repo clekkas/jfrog-agent-mykp -Environment agent
+```
+
+The importer requires contract version 1, a complete flat string map, and a checksum matching the publisher's canonical UTF-8 JSON plus trailing LF. It compares tenant, subscription, resource group, account, project, resource ID, and endpoint against the existing `agent` environment before any writes. App-owned identity/state settings are rejected. Missing target settings require bootstrap first; mismatches require a matching contract, not a retargeting override. A checksum checks integrity, not provenance: approve the source artifact before importing.
+
+Do not bulk-copy variables with `gh variable set` loops: that bypasses target and integrity checks. An import updates variables only; it does not trigger a deployment.
+
+For manual deployed-agent validation, acquire a token for `https://ai.azure.com` into `AZURE_AI_ACCESS_TOKEN` and run:
+
+```powershell
+python scripts/test-hosted-agent.py `
+  --endpoint "https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp" `
+  --agent mykp-hosted-agent --version "<candidate-version>" `
+  --expected-image "<registry/repository/agent-mykp@sha256:digest>" `
+  --expected-model gpt-5-mini
+```
+
+Pass `--expected-model ""` for intentional echo mode; omit the option to infer the deployment from the verified candidate definition. Old images without execution metadata fail these stronger checks and need to be rebuilt.
