@@ -17,9 +17,9 @@ This repository deploys the `mykp-hosted-agent` hosted agent to the Foundry proj
 | Setting | Value |
 |---|---|
 | Tenant | `16b3c013-d300-468d-ac64-7eda0820b6d3` |
-| Foundry account | `kaiser-foundry-resource` |
-| Project ID | `/subscriptions/0e494a0c-e2e6-41f8-8a50-6064d842225e/resourceGroups/kaiser-foundry-rg/providers/Microsoft.CognitiveServices/accounts/kaiser-foundry-resource/projects/mysecond-project-for-kp` |
-| Project endpoint | `https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp` |
+| Foundry account | `<foundry-account>` |
+| Project ID | `/subscriptions/0e494a0c-e2e6-41f8-8a50-6064d842225e/resourceGroups/<foundry-resource-group>/providers/Microsoft.CognitiveServices/accounts/<foundry-account>/projects/mysecond-project-for-kp` |
+| Project endpoint | `https://<foundry-account>.services.ai.azure.com/api/projects/mysecond-project-for-kp` |
 | Model deployment | `gpt-5-mini` |
 
 This application repository is independently bootstrapped, but depends on infrastructure owned by [`jfrog-oidc-foundry`](https://github.com/clekkas/jfrog-oidc-foundry): the account-shared Foundry connection `jfrog-registry-acct`, the Terraform state account `tfstateb173d2d85c34`, and the runner infrastructure. It has its own state container and repo-scoped runner. `scripts/bootstrap-github-oidc.ps1` initializes this project's deployment variables without reading foundation state or downloading a contract.
@@ -110,7 +110,7 @@ For manual deployed-agent validation, acquire a token for `https://ai.azure.com`
 
 ```powershell
 python scripts/test-hosted-agent.py `
-  --endpoint "https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp" `
+  --endpoint "https://<foundry-account>.services.ai.azure.com/api/projects/mysecond-project-for-kp" `
   --agent mykp-hosted-agent --version "<candidate-version>" `
   --expected-image "<registry/repository/agent-mykp@sha256:digest>" `
   --expected-model gpt-5-mini

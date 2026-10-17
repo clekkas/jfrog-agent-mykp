@@ -1,4 +1,4 @@
-<!-- scope: architecture, runner, runners, vnet, private endpoint, oidc, workflow, workflows, pipeline, state, tfstate, identity, identities, environment, environments, reviewers, digest, hosted agent, mykp, mykp-hosted-agent, jfrog-agent-mykp, jfrog-agent-byor, jfrog-oidc-foundry, platform repo, foundation repo, agent repo, concurrency, nsg, managed identity, mysecond-project-for-kp, kaiser-foundry-resource, agent-mykp, byor-demo-docker, byor-private -->
+<!-- scope: architecture, runner, runners, vnet, private endpoint, oidc, workflow, workflows, pipeline, state, tfstate, identity, identities, environment, environments, reviewers, digest, hosted agent, mykp, mykp-hosted-agent, jfrog-agent-mykp, jfrog-agent-byor, jfrog-oidc-foundry, platform repo, foundation repo, agent repo, concurrency, nsg, managed identity, mysecond-project-for-kp, <foundry-account>, agent-mykp, byor-demo-docker, byor-private -->
 # Architecture and workflows (condensed overview)
 
 Written 2026-10-12 from the repository contents and the live deployment. Where this differs from the generated asset inventory (`azure-assets.md`) the inventory is newer for live values such as version numbers. Subscription, tenant and application IDs are redacted on purpose.
@@ -18,13 +18,13 @@ This repo is self-contained. It does not read any other repository's Terraform s
 ## Current state
 
 - The live agent is `mykp-hosted-agent`, active, using model `gpt-5-mini`. The latest version and image digest are in `azure-assets.md`.
-- It runs in the project `mysecond-project-for-kp` of the Foundry account `kaiser-foundry-resource`.
+- It runs in the project `mysecond-project-for-kp` of the Foundry account `<foundry-account>`.
 - It pulls its image through the Foundry connection `jfrog-registry-acct`, an account-level shared connection that every project in the account can use. The project has no project-scoped connection of its own.
 - Deploys come from the `agent` GitHub environment, restricted to the `main` branch. Required reviewers are not enabled because the GitHub plan does not support them on private repositories, so there is no human approval gate.
 
 ## Runner
 
-- Jobs that touch Terraform state run on the self-hosted runner `byor-ci-mykp-runner-01`, label `byor-private`, registered only to this repo. It is a Standard_B2s_v2 Ubuntu VM in swedencentral in resource group `kaiser-foundry-rg`.
+- Jobs that touch Terraform state run on the self-hosted runner `byor-ci-mykp-runner-01`, label `byor-private`, registered only to this repo. It is a Standard_B2s_v2 Ubuntu VM in swedencentral in resource group `<foundry-resource-group>`.
 - Two other runner VMs share the same VNet `byor-ci-vnet`: `byor-ci-runner-01` (foundation repo) and `byor-ci-agent-runner-01` (the byor agent repo). The network security group rule `deny-vnet-inbound` blocks inbound traffic between them.
 - Why a private VNet: the Terraform state account `tfstateb173d2d85c34` has public network access disabled. The only way in is the private endpoint `byor-ci-tfstate-blob-pe`, with the private DNS zone `privatelink.blob.core.windows.net`. A 403 on state from a laptop means you are outside the VNet.
 - The VM has no public IP, no inbound access and no Azure identity of its own. Azure identity comes from the workflow: the `azure/login` action exchanges the job's GitHub OIDC token for an Entra token for the app `github-mykp-agent-deployer`.

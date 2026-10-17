@@ -42,7 +42,7 @@ One storage account, `tfstateb173d2d85c34`, public access disabled, reachable on
 | Principal | Role | Scope |
 |---|---|---|
 | Deploy identity `github-mykp-agent-deployer` | Foundry Project Manager | The Foundry project |
-| Deploy identity | Reader | Resource group `kaiser-foundry-rg` |
+| Deploy identity | Reader | Resource group `<foundry-resource-group>` |
 | Deploy identity | Storage Blob Data Contributor | Container `agent-tfstate-mykp` only |
 | The operator running bootstrap | Storage Blob Data Contributor | Container `agent-tfstate-mykp` |
 

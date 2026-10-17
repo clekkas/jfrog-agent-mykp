@@ -14,7 +14,7 @@ The pull side is configured by a Foundry connection of type `registry_connection
 
 ## Registry connection
 
-- The connection used is `jfrog-registry-acct`. It is an account-level shared connection on `kaiser-foundry-resource`, shared to all projects, so it resolves by name from `mysecond-project-for-kp`. The project has no project-scoped registry connection.
+- The connection used is `jfrog-registry-acct`. It is an account-level shared connection on `<foundry-account>`, shared to all projects, so it resolves by name from `mysecond-project-for-kp`. The project has no project-scoped registry connection.
 - This repo does not create or change the connection. It only references it by name through `registry_connection_id`.
 - Its target is the JFrog base URL `https://trialndswdc.jfrog.io`, stored in the variable `JF_URL`.
 - The token exchange settings are stored as the variables `REGISTRY_TOKEN_AUDIENCE`, `REGISTRY_TOKEN_ENDPOINT` (`/access/api/v1/oidc/token`) and `REGISTRY_OIDC_PROVIDER_NAME` (`oidc-byor`). The deploy workflow does not need them; they are kept for the inventory.
@@ -43,7 +43,7 @@ A JFrog 403 "failed to exchange OIDC token" in the build job's JFrog login means
 
 - The logical agent is `mykp-hosted-agent`, a Foundry data-plane resource of type `Microsoft.Foundry/agents@v1`, managed with `azapi_data_plane_resource` in `infra/hosted-agent`. It has `prevent_destroy`.
 - Changing the image creates a new version under the same agent; old versions stay in Foundry history. The endpoint routes all traffic to the latest version.
-- The project endpoint is `https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp`.
+- The project endpoint is `https://<foundry-account>.services.ai.azure.com/api/projects/mysecond-project-for-kp`.
 - Allowed sizes (SKUs) are CPU and memory pairs: 0.5 CPU with 1Gi, 1 with 2Gi, and 2 with 4Gi. The list is hardcoded in `main.tf` and also read from the variable `SUPPORTED_AGENT_SKUS`, so the two can drift. The default is 0.5 CPU with 1Gi.
 - A new version has a state and must reach active; a failed state or a different image fails the smoke test.
 - The platform-managed agent identity can reach project models by default, so no extra role assignment is needed for model mode.

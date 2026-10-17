@@ -10,12 +10,12 @@ IDs (subscription, tenant, object and client IDs) are redacted. Secrets are neve
 - **Model**: the agent answers with model **`gpt-5-mini`** through the Foundry project endpoint, using its own platform-managed identity.
 - **CI/CD**: GitHub Actions builds the image, pushes it to JFrog (GitHub OIDC), and applies Terraform for the hosted agent only. The agent is managed through the Foundry data plane with AzAPI. All authentication uses OIDC; no secrets are stored.
 - **Platform**: this repo is self-contained. It uses the account-shared registry connection `jfrog-registry-acct` (owned by the dev foundation environment), the shared Terraform state account and VNet, and its own repo-scoped runner.
-- **Azure location**: resource group `kaiser-foundry-rg`, Foundry in **eastus**.
+- **Azure location**: resource group `<foundry-resource-group>`, Foundry in **eastus**.
 
 ## Foundry
 
-- **Account**: `kaiser-foundry-resource` (eastus), pre-existing
-- **Project**: `mysecond-project-for-kp`, endpoint `https://kaiser-foundry-resource.services.ai.azure.com/api/projects/mysecond-project-for-kp`, identity type: SystemAssigned
+- **Account**: `<foundry-account>` (eastus), pre-existing
+- **Project**: `mysecond-project-for-kp`, endpoint `https://<foundry-account>.services.ai.azure.com/api/projects/mysecond-project-for-kp`, identity type: SystemAssigned
 
 ### Model deployments
 
@@ -45,14 +45,14 @@ The `jfrog-registry-acct` connection is an account-level shared connection (visi
 | 2 | active | 2026-10-13 03:49 UTC | `trialndswdc.jfrog.io/byor-demo-docker/agent-mykp@sha256:cef6a46aa198d8186f00940dbf992816fdda110c5ed012b57b716fd17ff7b104` | 0.5 CPU / 1Gi | AZURE_AI_MODEL_DEPLOYMENT_NAME=gpt-5-mini |
 | 1 | active | 2026-10-13 03:45 UTC | `trialndswdc.jfrog.io/byor-demo-docker/agent-mykp@sha256:cef6a46aa198d8186f00940dbf992816fdda110c5ed012b57b716fd17ff7b104` | 0.5 CPU / 1Gi | AZURE_AI_MODEL_DEPLOYMENT_NAME=gpt-5-mini |
 
-## Azure resources in `kaiser-foundry-rg`
+## Azure resources in `<foundry-resource-group>`
 
 | Name | Type | Region | Origin |
 |---|---|---|---|
-| `kaiser-foundry-resource` | Microsoft.CognitiveServices/accounts | eastus | Platform: Foundry |
+| `<foundry-account>` | Microsoft.CognitiveServices/accounts | eastus | Platform: Foundry |
 | `workshop-demo-project-v-resource` | Microsoft.CognitiveServices/accounts | eastus2 | Platform: Foundry |
-| `kaiser-foundry-resource/mysecond-project-for-kp` | Microsoft.CognitiveServices/accounts/projects | eastus | Platform: Foundry |
-| `kaiser-foundry-resource/workshop-demo-project` | Microsoft.CognitiveServices/accounts/projects | eastus | Platform: Foundry |
+| `<foundry-account>/mysecond-project-for-kp` | Microsoft.CognitiveServices/accounts/projects | eastus | Platform: Foundry |
+| `<foundry-account>/workshop-demo-project` | Microsoft.CognitiveServices/accounts/projects | eastus | Platform: Foundry |
 | `workshop-demo-project-v-resource/workshop-demo-project-v2` | Microsoft.CognitiveServices/accounts/projects | eastus2 | Platform: Foundry |
 | `byor-ci-agent-runner-01_OsDisk_1_da31917457fe4344891f25bf6eb4ba47` | Microsoft.Compute/disks | swedencentral | Platform: CI runner (foundation repo) |
 | `byor-ci-mykp-runner-01_OsDisk_1_04b7c42682e549ae8d5ee9ce3c2fb82e` | Microsoft.Compute/disks | swedencentral | Platform: CI runner (foundation repo) |
@@ -102,8 +102,8 @@ The repo uses GitHub's ID-based ("immutable") OIDC subjects, so the credential c
 
 | Principal | Role | Scope |
 |---|---|---|
-| GitHub Actions agent deploy identity | Foundry Project Manager | accounts `kaiser-foundry-resource` / projects `mysecond-project-for-kp` |
-| GitHub Actions agent deploy identity | Reader | resource group `kaiser-foundry-rg` |
+| GitHub Actions agent deploy identity | Foundry Project Manager | accounts `<foundry-account>` / projects `mysecond-project-for-kp` |
+| GitHub Actions agent deploy identity | Reader | resource group `<foundry-resource-group>` |
 | GitHub Actions agent deploy identity | Storage Blob Data Contributor | storageAccounts `tfstateb173d2d85c34` / blobServices `default` / containers `agent-tfstate-mykp` |
 | Operator (user) | Storage Blob Data Contributor | storageAccounts `tfstateb173d2d85c34` |
 
